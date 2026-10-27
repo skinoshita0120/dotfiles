@@ -52,6 +52,9 @@ jdtls.start_or_attach({
   capabilities = capabilities,
   cmd = {
     jdtls_cmd,
+    -- jdtls sets no max heap, so the JVM default (1/4 of RAM) applies to every
+    -- instance; cap it since each nvim runs its own server.
+    "--jvm-arg=-Xmx2g",
     "-data",
     workspace_dir,
   },
