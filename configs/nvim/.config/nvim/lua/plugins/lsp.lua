@@ -18,7 +18,9 @@ return {
         "jdtls",
       },
       automatic_enable = {
-        exclude = { "rust_analyzer" },
+        -- `jdtls` is started by nvim-jdtls in `after/ftplugin/java.lua`;
+        -- enabling it here as well would spawn a second server per buffer.
+        exclude = { "rust_analyzer", "jdtls" },
       },
     },
   },

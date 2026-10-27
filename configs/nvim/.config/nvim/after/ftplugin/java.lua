@@ -3,8 +3,12 @@ if not ok then
   return
 end
 
-local root_markers = { ".git", "mvnw", "gradlew", "pom.xml", "build.gradle", "build.gradle.kts" }
-local root_dir = require("jdtls.setup").find_root(root_markers)
+-- Prefer the multi-project root (where the wrapper and settings live) over the
+-- nearest subproject, so Gradle imports the whole build with its wrapper.
+local root_dir = vim.fs.root(0, {
+  { "gradlew", "mvnw", "settings.gradle", "settings.gradle.kts" },
+  { "build.gradle", "build.gradle.kts", "pom.xml" },
+})
 if not root_dir then
   return
 end
@@ -24,7 +28,24 @@ if vim.fn.executable(jdtls_cmd) == 0 then
   return
 end
 
-local project_name = vim.fn.fnamemodify(root_dir, ":t")
+-- Ask the `java` on PATH for its home instead of hardcoding a path; this also
+-- sees through the macOS `/usr/bin/java` stub and version-manager shims.
+-- Cached because ftplugin runs for every Java buffer.
+local function java_home()
+  if vim.g.jdtls_java_home == nil then
+    local home = ""
+    if vim.fn.executable("java") == 1 then
+      local out = vim.fn.system({ "java", "-XshowSettings:properties", "-version" })
+      home = vim.v.shell_error == 0 and out:match("java%.home = ([^\r\n]+)") or ""
+    end
+    vim.g.jdtls_java_home = home
+  end
+  return vim.g.jdtls_java_home ~= "" and vim.g.jdtls_java_home or nil
+end
+
+-- Include a hash of the full path so worktrees with the same directory name
+-- do not share (and corrupt) one workspace.
+local project_name = vim.fn.fnamemodify(root_dir, ":t") .. "-" .. vim.fn.sha256(root_dir):sub(1, 8)
 local workspace_dir = vim.fn.stdpath("cache") .. "/jdtls-workspace/" .. project_name
 
 jdtls.start_or_attach({
@@ -35,4 +56,14 @@ jdtls.start_or_attach({
     workspace_dir,
   },
   root_dir = root_dir,
+  settings = {
+    java = {
+      import = {
+        gradle = {
+          -- Pin the JDK Gradle runs on, so daemons are not split by JDK.
+          java = { home = java_home() },
+        },
+      },
+    },
+  },
 })
