@@ -13,17 +13,31 @@ return {
         return ""
       end
 
-      local specs = vim.fn.systemlist({ "git", "-C", toplevel, "config", "--get-all", "diffview.exclude" })
-      if vim.v.shell_error ~= 0 then
+      local attributes = toplevel .. "/.gitattributes"
+      if vim.fn.filereadable(attributes) == 0 then
         return ""
       end
 
-      return table.concat(
-        vim.tbl_map(function(spec)
-          return ("'%s'"):format(spec)
-        end, specs),
-        " "
-      )
+      local specs = {}
+      for _, line in ipairs(vim.fn.readfile(attributes)) do
+        local pattern, attrs = line:match("^%s*([^#%s]%S*)%s+(.*)$")
+        -- linguist treats both `linguist-generated` and `linguist-generated=true` as generated
+        local generated = pattern
+          and vim.iter(vim.split(attrs, "%s+", { trimempty = true })):any(function(attr)
+            return attr == "linguist-generated" or attr == "linguist-generated=true"
+          end)
+        if generated then
+          -- gitattributes patterns without a slash match at any depth
+          if pattern:find("/", 1, true) then
+            pattern = pattern:gsub("^/", "")
+          else
+            pattern = "**/" .. pattern
+          end
+          table.insert(specs, ("':(exclude,glob)%s'"):format(pattern))
+        end
+      end
+
+      return table.concat(specs, " ")
     end
   end,
   keys = {
